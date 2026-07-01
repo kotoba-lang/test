@@ -1,0 +1,13 @@
+{:paths ["src"]
+ ;; kotoba-lang/test — Layer 4 (tooling) of the kotoba foundational stdlib.
+ ;; Property testing + assertion helpers. Consumes the sibling kotoba-lang/spec
+ ;; (first-party, zero-dep) for generators, so a spec is also a test generator —
+ ;; making kotoba-lang/test a consumer of spec (M5 for spec). No third-party deps.
+ ;; .cljc. See ADR-kotoba-lang-foundational-stdlib.md.
+ :deps {io.github.kotoba-lang/spec {:git/sha "7af79b6a9f5a4d8804a170b2ed0e316f5845286f"}}
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {io.github.cognitect-labs/test-runner
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+         :main-opts ["-m" "cognitect.test-runner"]
+         :exec-fn cognitect.test-runner.api/test}}}
