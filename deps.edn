@@ -1,5 +1,5 @@
 {:paths ["src"]
- :version "0.1.0"
+ :version "0.2.0"
  ;; kotoba-lang/test — Layer 4 (tooling) of the kotoba foundational stdlib.
  ;; Property testing + assertion helpers. Consumes the sibling kotoba-lang/spec
  ;; (first-party, zero-dep) for generators, so a spec is also a test generator —
@@ -15,4 +15,10 @@
        ;; clj-kondo as a Clojars lib (no Homebrew/system install needed).
        :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
          :main-opts ["-m" "clj-kondo.main" "--lint" "src" "test"
-                     "--fail-level" "error"]}}}
+                     "--fail-level" "error"]}
+       ;; Non-negotiable self-verification for the deftest/is/testing/are/
+       ;; run-tests layer (kotoba.lang.test.selftest-run): asserts the
+       ;; harness correctly detects deliberately-planted failures/errors AND
+       ;; reports 0 for an all-passing suite. `clojure -M:selftest`.
+       :selftest {:extra-paths ["test"]
+                  :main-opts ["-m" "kotoba.lang.test.selftest-run"]}}}

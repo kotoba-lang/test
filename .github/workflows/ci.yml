@@ -44,5 +44,8 @@ jobs:
       - name: Run tests
         run: clojure -M:test
 
+      - name: Self-verify the deftest/is/testing/are/run-tests layer
+        run: clojure -M:selftest
+
       - name: Lint
         run: clojure -M:lint
