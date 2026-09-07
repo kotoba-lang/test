@@ -168,3 +168,334 @@
     :fn      (gen-int rng 0 9)        ; can't sample an arbitrary pred
     ;; composites: return a small scalar placeholder (M1 surface)
     (gen-int rng 0 9)))
+
+;; ============================================================
+;; ---------- deftest-style unit testing ----------
+;; ============================================================
+;;
+;; Alongside the property-testing layer above, this section adds the
+;; example-based `deftest` / `is` / `testing` / `are` / `run-tests` surface
+;; that `clojure.test` provides — see
+;; `adr-2809061500-clojure-namespace-to-kotoba-stdlib` (com-junkawasaki/root)
+;; for why: `clojure.test` is required for exactly this surface by more
+;; files than any other single `clojure.*` namespace in that workspace,
+;; making it the single largest, highest-risk piece of that migration
+;; program. A defective test framework that silently reports green on a
+;; real failure would be worse than the `clojure.test` dependency it
+;; replaces — so this layer's own pass/fail detection is verified against
+;; deliberately-planted failures, on both JVM and nbb, before anything else
+;; in this workspace depends on it. See
+;; `test/kotoba/lang/test/selftest_negative.cljc`.
+;;
+;; NOTE on internal helpers below marked `defn` (not `defn-`): `deftest` /
+;; `is` / `testing` / `are` splice calls to them into the *caller's*
+;; compiled code via syntax-quote. On the JVM, a macro-expanded reference to
+;; a `defn-` (private) var from another namespace fails to compile
+;; ("var: ... is not public") even though the macro itself is public —
+;; confirmed by hand before writing this file. So `register-test!`,
+;; `record-pass!`, `record-fail!`, and `record-error!`, plus the
+;; `*report*`/`*contexts*`/`*current-test*` dynamic vars, are public. They
+;; are still implementation detail, not a surface to call directly.
+
+;; {ns-sym {test-sym test-fn}} — populated by `deftest`, read by `run-tests`.
+(defonce ^:private test-registry (atom {}))
+
+(defn register-test!
+  "Register 0-arg `test-fn` under `ns-sym`/`test-sym`. Called by the
+  `deftest` macro's expansion; not usually called directly."
+  [ns-sym test-sym test-fn]
+  (swap! test-registry assoc-in [ns-sym test-sym] test-fn))
+
+(defn registered-tests
+  "Read-only snapshot of the global test registry: {ns-sym {test-sym
+  test-fn}}."
+  []
+  @test-registry)
+
+(def ^:dynamic *report*
+  "Bound by `run-tests` to an atom accumulating {:test :pass :fail :error
+  :details}. nil outside a `run-tests` call — `is` still evaluates its
+  expression and returns its truthiness, it just records nothing."
+  nil)
+
+(def ^:dynamic *contexts*
+  "Stack of active `testing` labels, innermost last. Joined with \" > \" in
+  failure/error output."
+  [])
+
+(def ^:dynamic *current-test*
+  "\"ns-sym/test-sym\" string naming the test currently executing under
+  `run-tests`, or nil outside one."
+  nil)
+
+(defn- context-str []
+  (when (seq *contexts*) (apply str (interpose " > " *contexts*))))
+
+(defn- print-detail!
+  "Print one FAIL/ERROR report line group. Called by `record-fail!` /
+  `record-error!` unconditionally (even with `*report*` unbound), so `is`
+  gives feedback when used outside `run-tests` too — e.g. at a REPL."
+  [{:keys [type test line context form expected actual exception note
+           has-expected? msg]}]
+  (println (str (if (= type :error) "ERROR" "FAIL") " in "
+                (or test "(no test)") (when line (str " (line " line ")"))))
+  (when context (println (str "  testing: " context)))
+  (when msg (println (str "  msg: " msg)))
+  (println (str "  form: " (pr-str form)))
+  (if (= type :error)
+    (println (str "  error: "
+                   (or (some-> exception ex-message) (str exception))
+                   (when note (str " (" note ")"))))
+    (if has-expected?
+      (do (println (str "  expected: " (pr-str expected)))
+          (println (str "    actual: " (pr-str actual))))
+      (when note (println (str "  note: " note))))))
+
+(defn record-pass!
+  "Record one passing assertion against `*report*` (a no-op if unbound).
+  Called by `is`'s macroexpansion; not usually called directly."
+  []
+  (when *report*
+    (swap! *report* update :pass (fnil inc 0))))
+
+(defn record-fail!
+  "Record one failing (not erroring) assertion: prints the detail and, if
+  `*report*` is bound, tallies it. Called by `is`'s macroexpansion; not
+  usually called directly."
+  [detail]
+  (let [detail (assoc detail :type :fail :test *current-test*
+                       :context (context-str))]
+    (print-detail! detail)
+    (when *report*
+      (swap! *report* (fn [s]
+                         (-> s
+                             (update :fail (fnil inc 0))
+                             (update :details (fnil conj []) detail)))))))
+
+(defn record-error!
+  "Record one erroring assertion (the expression under test threw
+  unexpectedly): prints the detail and, if `*report*` is bound, tallies it.
+  Called by `is`'s macroexpansion (and by `run-tests` for an exception that
+  escapes an entire test body); not usually called directly."
+  [detail]
+  (let [detail (assoc detail :type :error :test *current-test*
+                       :context (context-str))]
+    (print-detail! detail)
+    (when *report*
+      (swap! *report* (fn [s]
+                         (-> s
+                             (update :error (fnil inc 0))
+                             (update :details (fnil conj []) detail)))))))
+
+;; ---------- `is` ----------
+
+(defn- eq-form?
+  "True iff `expr` is the 2-arg shape `(= expected actual)` — the shape `is`
+  special-cases to report expected/actual separately."
+  [expr]
+  (and (seq? expr) (= 3 (count expr))
+       (symbol? (first expr)) (= "=" (name (first expr)))))
+
+(defn- thrown-form?
+  "True iff `expr` is the shape `(thrown? ExClass body...)`."
+  [expr]
+  (and (seq? expr) (>= (count expr) 2)
+       (symbol? (first expr)) (= "thrown?" (name (first expr)))))
+
+(defn- is-build
+  "Build the code `is` expands to for `expr`/`msg`/`line`. A plain function
+  (not a macro) called from EACH arity of the `is` macro below, each
+  passing its OWN `(:line (meta &form))` — NOT one arity delegating to the
+  other via a nested `is` call. That distinction matters: a nested macro
+  call like `(is ~expr nil)` builds a fresh, synthetic form with no reader
+  location of its own, so `&form` at the inner expansion sees no line
+  number — confirmed by hand (JVM silently lost the line this way; nbb
+  happened not to). Two arities calling this shared builder directly, each
+  with its own real `&form`, avoids that regression on either host."
+  [expr msg line]
+  (cond
+    (eq-form? expr)
+    (let [[_ e a] expr]
+      `(try
+         (let [expected# ~e
+               actual# ~a
+               result# (= expected# actual#)]
+           (if result#
+             (do (record-pass!) true)
+             (do (record-fail! {:form '~expr :line ~line :msg ~msg
+                                 :has-expected? true
+                                 :expected expected# :actual actual#})
+                 false)))
+         (catch #?(:clj Throwable :cljs :default) e#
+           (record-error! {:form '~expr :line ~line :msg ~msg
+                            :exception e#})
+           false)))
+
+    (thrown-form? expr)
+    (let [ex-class (second expr)
+          body (nthnext expr 2)]
+      `(try
+         (do ~@body)
+         (record-fail! {:form '~expr :line ~line :msg ~msg
+                         :note "expected exception, none thrown"})
+         false
+         (catch ~ex-class e#
+           (record-pass!)
+           true)
+         (catch #?(:clj Throwable :cljs :default) e#
+           (record-error! {:form '~expr :line ~line :msg ~msg
+                            :note "wrong exception type" :exception e#})
+           false)))
+
+    :else
+    `(try
+       (let [result# ~expr]
+         (if result#
+           (do (record-pass!) true)
+           (do (record-fail! {:form '~expr :line ~line :msg ~msg}) false)))
+       (catch #?(:clj Throwable :cljs :default) e#
+         (record-error! {:form '~expr :line ~line :msg ~msg :exception e#})
+         false))))
+
+(defmacro is
+  "Assert `expr` is truthy; returns its truthiness. Records a pass, fail, or
+  error against the currently-bound `*report*` (installed by `run-tests`;
+  outside one, `expr` still evaluates and prints on failure, it's just not
+  tallied).
+
+  `(is (= expected actual))` is special-cased: `expected` and `actual` are
+  evaluated and recorded *separately*, so a failure prints both
+  independently — clojure.test's single most useful behavior, matched here.
+  `(is (= a b c ...))` with more than two operands is NOT special-cased
+  (documented limitation, not a silent approximation): it's evaluated as an
+  ordinary boolean expression and reported as a plain fail/pass.
+
+  `(is (thrown? ExClass body...))` is special-cased: passes iff `body`
+  throws an instance of `ExClass`; fails if `body` returns normally; errors
+  if `body` throws something else. `ExClass` must be a class token the
+  *host actually running this test* can resolve as a catch clause target —
+  same as clojure.test's `thrown?`, that token is not itself portable
+  across a single literal spanning JVM and cljs; wrap it in
+  `#?(:clj SomeException :cljs js/Error)` (or similar) at the call site
+  when a shared .cljc test needs to run on both. `thrown-with-msg?` is not
+  implemented — see this repo's README.
+
+  Optional trailing `msg` is printed alongside a failure/error; otherwise
+  unused. File/line is recorded best-effort (via `&form` metadata) — a
+  miss there does not affect the pass/fail/error signal itself."
+  ([expr] (is-build expr nil (:line (meta &form))))
+  ([expr msg] (is-build expr msg (:line (meta &form)))))
+
+;; ---------- `deftest` ----------
+
+(defmacro deftest
+  "Define a test named `test-name` running `body` (as an implicit `do`), and
+  register it under the current namespace in the global test registry so
+  `run-tests` can find it. Also `def`s `test-name` to the 0-arg test
+  function, so it can be invoked directly like any other fn. Mirrors
+  clojure.test's `deftest`."
+  [test-name & body]
+  `(let [test-fn# (fn [] ~@body)]
+     (register-test! '~(symbol (str *ns*)) '~test-name test-fn#)
+     (def ~test-name test-fn#)))
+
+;; ---------- `testing` ----------
+
+(defmacro testing
+  "Push `msg` onto the `testing` context stack for the duration of `body`;
+  any `is` failure/error inside prints it. Nested `testing` blocks compose,
+  innermost last, joined with \" > \"."
+  [msg & body]
+  `(binding [*contexts* (conj *contexts* ~msg)]
+     ~@body))
+
+;; ---------- `are` ----------
+
+(defmacro are
+  "Templated assertions: for each row of values in `args` (grouped by the
+  size of `argv`), bind `argv`'s symbols to that row and run `(is expr)`.
+  `(are [x y] (= x y) 1 1 2 2)` runs `(is (= 1 1))` then `(is (= 2 2))`.
+
+  This is a small `let`-based reimplementation with the same observable
+  behavior as clojure.test's `are` — NOT a port of
+  `clojure.template/do-template` (no `clojure.template` dependency is
+  introduced, keeping this library dependency-free)."
+  [argv expr & args]
+  (let [argv (vec argv)
+        n (count argv)]
+    (if (zero? n)
+      `(is ~expr)
+      (do
+        (when-not (zero? (mod (count args) n))
+          (throw (ex-info "are: number of args must be a multiple of argv's size"
+                           {:argv argv :arg-count (count args)})))
+        `(do
+           ~@(for [row (partition n args)]
+               `(let [~@(interleave argv row)]
+                  (is ~expr))))))))
+
+;; ---------- `run-tests` ----------
+
+(defn- run-one! [ns-sym test-sym test-fn]
+  (swap! *report* update :test (fnil inc 0))
+  (binding [*current-test* (str ns-sym "/" test-sym)
+            *contexts* []]
+    (try
+      (test-fn)
+      (catch #?(:clj Throwable :cljs :default) e#
+        (record-error! {:form nil
+                         :note "uncaught exception escaped the test body"
+                         :exception e#})))))
+
+(defn run-tests-report
+  "Run deftest-registered tests and return the result map — same as
+  `run-tests` but NEVER calls `js/process.exit`, regardless of outcome.
+
+  With no args, runs every test in the global registry; with one or more
+  namespace symbols, runs only tests registered under those namespaces (in
+  the order registered).
+
+  Prints per-failure/-error detail as it goes, then a summary line, then
+  returns `{:test :pass :fail :error :assertions :details}` —
+  `:assertions` is `(+ pass fail error)`, `:details` a vector of the
+  fail/error records (each with :test :type :form :context and either
+  :expected/:actual or :exception/:note).
+
+  `run-tests` is the public entry point most callers want (it adds the
+  exit-on-failure side effect on `:cljs`). This function exists so a
+  caller can inspect a run's result map in-process without the process
+  exiting out from under it — which is exactly what this library's own
+  self-verification harness needs
+  (test/kotoba/lang/test/selftest_run.cljc): it runs a suite that is
+  DELIBERATELY full of planted failures and must compare the resulting
+  counts against what it planted, in the same process, before deciding
+  anything itself."
+  [& ns-syms]
+  (let [nss (if (seq ns-syms) ns-syms (keys @test-registry))
+        state (atom {:test 0 :pass 0 :fail 0 :error 0 :details []})]
+    (binding [*report* state]
+      (doseq [ns-sym nss
+              [test-sym test-fn] (get @test-registry ns-sym)]
+        (run-one! ns-sym test-sym test-fn)))
+    (let [{:keys [test pass fail error] :as final} @state
+          assertions (+ pass fail error)]
+      (println (str "Ran " test " tests, " assertions " assertions, "
+                     fail " failures, " error " errors."))
+      (assoc final :assertions assertions))))
+
+(defn run-tests
+  "Run deftest-registered tests (see `run-tests-report` for the args and
+  the returned map's shape).
+
+  Exit-code side effect: on nbb (`:cljs`), calls `(js/process.exit 1)` when
+  `(+ fail error)` is positive, matching this repo's own `run-tests.cljs`
+  idiom (a suite that fails while exiting 0 is worse than one that never
+  ran). On `:clj`, no process exit is performed here — the returned map is
+  the contract; a JVM caller that needs a shell exit code inspects it (see
+  this repo's own `deps.edn` `:test` alias, which uses
+  `cognitect.test-runner` against the OTHER (`clojure.test`-based) test
+  suite for that — this library does not shell out on its own behalf)."
+  [& ns-syms]
+  (let [result (apply run-tests-report ns-syms)]
+    #?(:cljs (when (pos? (+ (:fail result) (:error result))) (js/process.exit 1)))
+    result))
