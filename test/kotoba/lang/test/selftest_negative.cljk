@@ -8,10 +8,10 @@
 
   This namespace uses `kotoba.lang.test/deftest` (our own registry), NOT
   `clojure.test/deftest` — so `cognitect.test-runner` (JVM `:test` alias)
-  and `cljs.test`-based run-tests.cljs, both of which only know about
+  and `cljs.test`-based run-tests.cljk, both of which only know about
   `clojure.test`/`cljs.test`-metadata vars, find zero tests here and this
   namespace never corrupts the ordinary CI-green suite. It is only ever run
-  explicitly, via test/kotoba/lang/test/selftest_run.cljc's `verify!`.
+  explicitly, via test/kotoba/lang/test/selftest_run.cljk's `verify!`.
 
   Exercises every branch of `is`: the `(= expected actual)` special case
   (pass and fail), the `(thrown? ExClass body)` special case (pass, fail —

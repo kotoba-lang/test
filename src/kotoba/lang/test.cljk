@@ -191,7 +191,7 @@
 ;; replaces — so this layer's own pass/fail detection is verified against
 ;; deliberately-planted failures, on both JVM and nbb, before anything else
 ;; in this workspace depends on it. See
-;; `test/kotoba/lang/test/selftest_negative.cljc`.
+;; `test/kotoba/lang/test/selftest_negative.cljk`.
 ;;
 ;; NOTE on internal helpers below marked `defn` (not `defn-`): `deftest` /
 ;; `is` / `testing` / `are` splice calls to them into the *caller's*
@@ -472,7 +472,7 @@
   caller can inspect a run's result map in-process without the process
   exiting out from under it — which is exactly what this library's own
   self-verification harness needs
-  (test/kotoba/lang/test/selftest_run.cljc): it runs a suite that is
+  (test/kotoba/lang/test/selftest_run.cljk): it runs a suite that is
   DELIBERATELY full of planted failures and must compare the resulting
   counts against what it planted, in the same process, before deciding
   anything itself."
@@ -494,7 +494,7 @@
   the returned map's shape).
 
   Exit-code side effect: on nbb (`:cljs`), calls `(js/process.exit 1)` when
-  `(+ fail error)` is positive, matching this repo's own `run-tests.cljs`
+  `(+ fail error)` is positive, matching this repo's own `run-tests.cljk`
   idiom (a suite that fails while exiting 0 is worse than one that never
   ran). On `:clj`, no process exit is performed here — the returned map is
   the contract; a JVM caller that needs a shell exit code inspects it (see

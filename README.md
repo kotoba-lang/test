@@ -19,7 +19,7 @@ namespace was required for by far more files than any other single
 `clojure.*` require in that workspace, which is also why its own pass/fail
 detection is verified against deliberately-planted failures on **both** JVM
 and nbb before anything else depends on it (see Verify, and
-`test/kotoba/lang/test/selftest_negative.cljc`) — a defective test framework
+`test/kotoba/lang/test/selftest_negative.cljk`) — a defective test framework
 that silently reports green on a real failure would be worse than the
 `clojure.test` dependency it replaces.
 
@@ -70,7 +70,7 @@ Also in `kotoba.lang.test`, alongside the property-testing surface above
     literal spanning JVM and cljs; wrap it in
     `#?(:clj SomeException :cljs js/Error)` at call sites that need to run
     on both (see the examples below and in
-    `test/kotoba/lang/test/selftest_negative.cljc`).
+    `test/kotoba/lang/test/selftest_negative.cljk`).
   - An exception thrown by `expr` itself (in the generic, non-`thrown?`
     case) is caught and recorded as an **error**, distinct from a **fail**
     — and does not stop the rest of the enclosing `deftest` from running.
@@ -162,7 +162,7 @@ non-flagging of `thrown?` inside `is` is wired to the literal var
 `clojure.test/is`, not to `:lint-as` targets of it). Consumers adopting
 this library should copy or merge these entries too.
 
-`test/kotoba/lang/test/selftest_negative.cljc` and `selftest_positive.cljc`
+`test/kotoba/lang/test/selftest_negative.cljk` and `selftest_positive.cljc`
 are **not** part of the ordinary green suite — they use this library's own
 `deftest` (not `clojure.test`'s), so `cognitect.test-runner` / `cljs.test`
 scanning for `clojure.test`-metadata vars find nothing there and never
@@ -196,10 +196,10 @@ io.github.kotoba-lang/test {:git/sha "<sha>"}
 
 ```sh
 clojure -M:test                                          # JVM, property-testing suite
-npx nbb@1.4.210 --classpath src:test run-tests.cljs       # nbb, same suite, other runtime
+npx nbb@1.4.210 --classpath src:test run-tests.cljk       # nbb, same suite, other runtime
 
 clojure -M:selftest                                       # JVM, deftest layer self-verification
-npx nbb@1.4.210 --classpath src:test selftest.cljs        # nbb, same self-verification
+npx nbb@1.4.210 --classpath src:test selftest.cljk        # nbb, same self-verification
 ```
 
 Both hosts run the **same** `.cljc` suites and agree exactly:

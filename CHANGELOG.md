@@ -19,9 +19,9 @@ this repo the documented `clojure.test` successor named in
   both separately on failure) and `(thrown? ExClass body)` (pass/fail/error
   three-way). `are` is a small `let`-based reimplementation, not a port of
   `clojure.template/do-template`.
-- `test/kotoba/lang/test/selftest_negative.cljc`,
+- `test/kotoba/lang/test/selftest_negative.cljk`,
   `selftest_positive.cljc`, `selftest_run.cljc`, and the nbb entry
-  `selftest.cljs` / JVM alias `:selftest`: a self-verification harness that
+  `selftest.cljk` / JVM alias `:selftest`: a self-verification harness that
   asserts (not eyeballs) the exact test/pass/fail/error counts for a
   deliberately-mixed suite and an all-passing suite, on both JVM and nbb.
 - `.clj-kondo/config.edn`: `:lint-as` mappings onto the `clojure.test`

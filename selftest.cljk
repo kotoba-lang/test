@@ -7,7 +7,7 @@
 ;; measured and found nothing wrong." See test/kotoba/lang/test/
 ;; selftest_run.cljc and selftest_{negative,positive}.cljc.
 ;;
-;; This is separate from run-tests.cljs (which runs the ordinary,
+;; This is separate from run-tests.cljk (which runs the ordinary,
 ;; clojure.test-based property-testing suite) — this script never touches
 ;; that suite and vice versa.
 (ns selftest (:require [kotoba.lang.test.selftest-run :as sr]))
