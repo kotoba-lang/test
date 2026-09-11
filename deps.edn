@@ -86,6 +86,6 @@ io.github.kotoba-lang/spec {:git/sha "7af79b6a9f5a4d8804a170b2ed0e316f5845286f"}
        ;; Non-negotiable self-verification for the deftest/is/testing/are/
        ;; run-tests layer (kotoba.lang.test.selftest-run): asserts the
        ;; harness correctly detects deliberately-planted failures/errors AND
-       ;; reports 0 for an all-passing suite. `clojure -M:selftest`.
+       ;; reports 0 for an all-passing suite. `kbb -M:selftest`.
        :selftest {:extra-paths ["test"]
                   :main-opts ["-m" "kotoba.lang.test.selftest-run"]}}}

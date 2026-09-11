@@ -51,7 +51,7 @@
 
 #?(:clj
    (defn -main
-     "JVM entry: `clojure -M:selftest`. Exits 0 if the harness correctly
+     "JVM entry: `kbb -M:selftest`. Exits 0 if the harness correctly
      detected every planted failure/error and reported 0 for the all-passing
      suite, non-zero otherwise."
      [& _args]
