@@ -195,10 +195,10 @@ io.github.kotoba-lang/test {:git/sha "<sha>"}
 ## Verify
 
 ```sh
-clojure -M:test                                          # JVM, property-testing suite
+kbb -M:test                                          # JVM, property-testing suite
 npx nbb@1.4.210 --classpath src:test run-tests.cljk       # nbb, same suite, other runtime
 
-clojure -M:selftest                                       # JVM, deftest layer self-verification
+kbb -M:selftest                                       # JVM, deftest layer self-verification
 npx nbb@1.4.210 --classpath src:test selftest.cljk        # nbb, same self-verification
 ```
 
