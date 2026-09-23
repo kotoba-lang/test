@@ -172,6 +172,50 @@ report against them. `selftest_run.cljc` runs both suites via
 mixed negative suite, and 6 tests / 13 pass / 0 fail / 0 error / 13
 assertions for the all-passing positive suite — identical on JVM and nbb.
 
+## `kotoba.test` — the drop-in for `clojure.test` call sites
+
+`kotoba.test` (the facade) carries a **clojure.test-compatible surface** so
+that migrating a call site is a pure namespace rewrite:
+
+```clojure
+(:require [clojure.test :refer [deftest is testing are use-fixtures]])
+;; becomes
+(:require [kotoba.test :refer [deftest is testing are use-fixtures]])
+```
+
+Covered: `deftest` `is` (incl. `(is (thrown? C ...))` and
+`(is (thrown-with-msg? C re ...))`) `are` `testing` `use-fixtures` `async`
+(cljs) `run-tests` `successful?` `report` (the host multimethod object, so
+`(defmethod t/report [:cljs.test/default :end-run-tests] ...)` exit hooks
+keep working).
+
+These forward to the **host** runner (clojure.test on the JVM, cljs.test on
+the kbb engine), deliberately **not** to `kotoba.lang.test`'s registry: the
+repo's own runner (`kbb -M:test`, which substitutes cljs.test over every
+`*_test` namespace) discovers tests by `:test` var metadata and exits on
+the host's counters. A suite rewritten onto `kotoba.lang.test/deftest` ran
+0 tests and exited 0 (kotoba-lang/dance, 2026-09-07). Forwarding makes the
+rewrite count-preserving by construction, and `kotoba.test` becomes the one
+place that names the host framework.
+
+Not covered (a migrator must refuse, not rewrite): `assert-expr`,
+`do-report`, `*report-counters*`, `*testing-vars*`, `*testing-contexts*`,
+`test-var(s)`, `test-ns`, `run-all-tests`, `with-test`, `set-test`,
+`compose-fixtures`, `join-fixtures`, `deftest-`, and auto-resolved keywords
+through the alias (`::t/default`). `run-tests` is clojure.test's; the
+registry runner is `run-registered-tests`.
+
+A consumer declares the dependency in **`nbb.edn`** (the kbb engine reads
+`:deps` there; `kbb -M:test` puts no git coordinate from `deps.edn` on the
+classpath).
+
+Self-verification (`kbb -M:compat-selftest`) asserts, in-process and through
+the fleet runner, that the planted suite
+`test/kotoba/test/compat_negative.cljk` yields exactly 5 tests / 2 pass /
+4 fail / 1 error and that `kbb -M:compat-negative` **exits non-zero**; a
+copy whose `deftest` drops the `:test` metadata fails 4 of its 7 checks
+(0 tests, exit 0 — the silent-green case).
+
 ## Install
 
 ```clojure
@@ -200,6 +244,8 @@ npx nbb@1.4.210 --classpath src:test run-tests.cljk       # nbb, same suite, oth
 
 kbb -M:selftest                                       # JVM, deftest layer self-verification
 npx nbb@1.4.210 --classpath src:test selftest.cljk        # nbb, same self-verification
+
+kbb -M:compat-selftest                                # kotoba.test clojure.test-compatible surface
 ```
 
 Both hosts run the **same** `.cljc` suites and agree exactly:
