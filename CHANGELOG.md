@@ -4,6 +4,26 @@ All notable changes to kotoba-lang/test are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/). Semver per the
 kotoba-lang stdlib compatibility policy (kotoba-lang/kotoba-lang/docs/lang/stdlib-versioning.md).
 
+## [0.3.0] - 2026-09-23
+
+### Added
+
+- `kotoba.test`: a clojure.test-compatible surface — `deftest` `is`
+  (`thrown?` / `thrown-with-msg?`) `are` `testing` `use-fixtures` `async`
+  `run-tests` `successful?` `report` — forwarding to the host runner so a
+  `clojure.test` → `kotoba.test` rewrite is discovered and counted by the
+  repo's existing runner (`kbb -M:test`). Self-verified by
+  `kbb -M:compat-selftest` (planted failures must make the runner exit
+  non-zero with exact counts).
+- `nbb.edn` (the kbb engine reads `:deps` there), so `kbb -M:test` runs
+  this repo's suites.
+
+### Changed
+
+- `kotoba.test/run-tests` is now clojure.test's `run-tests`. The registry
+  runner it used to re-export (0 callers in the workspace) is
+  `kotoba.test/run-registered-tests`.
+
 ## [0.2.0] - 2026-09-06
 
 Added a `deftest`/`is`/`testing`/`are`/`run-tests` unit-testing layer
