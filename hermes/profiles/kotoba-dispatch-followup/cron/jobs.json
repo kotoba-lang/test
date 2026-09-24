@@ -7,11 +7,11 @@
       "enabled": true,
       "enabled_toolsets": null,
       "id": "443e648be8e0",
-      "model": "qwen3.8-27b-whitehacker",
+      "model": "murakumo/free",
       "name": "kotoba-dispatch-tick",
       "no_agent": false,
       "prompt": "SOUL.md を読み、evidence script を 1 回実行し、既知残課題を 1 finding だけ propose せよ（propose-only、編集・PR 禁止）。優先: kagi revert / test-runner blocker。測定は script が持つので再計算しない。",
-      "provider": "kotoba",
+      "provider": "murakumo",
       "schedule": {
         "kind": "cron",
         "expr": "40 9 * * *",
