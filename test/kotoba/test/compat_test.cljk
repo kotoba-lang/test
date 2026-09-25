@@ -19,7 +19,7 @@
 (deftest thrown-forms
   (is (thrown? #?(:clj ArithmeticException :cljs js/Error)
                (throw #?(:clj (ArithmeticException. "boom") :cljs (js/Error. "boom")))))
-  (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown-with-msg? js/Error
                         #"bo+m"
                         (throw (ex-info "boom" {})))))
 
