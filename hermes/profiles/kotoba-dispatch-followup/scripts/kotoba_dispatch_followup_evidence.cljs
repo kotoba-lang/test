@@ -2,7 +2,7 @@
 ;; 判断はこの script が持つ。agent は出力 JSON を読んで 1 finding を報告するだけ。
 ;; credential を読まない。実行: nbb scripts/kotoba_dispatch_followup_evidence.cljs
 
-(require '[clojure.string :as str]
+(require '[kotoba.lang.text :as str]
          '["node:child_process" :as cp]
          '["node:fs" :as fs]
          '["node:path" :as path]

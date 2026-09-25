@@ -20,7 +20,7 @@
   (is (= 1 (throw (ex-info "planted error" {})))))       ; error
 
 (deftest wrong-message
-  (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown-with-msg? js/Error
                         #"never matches"
                         (throw (ex-info "boom" {})))))   ; fail
 
