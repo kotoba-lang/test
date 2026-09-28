@@ -17,7 +17,7 @@ kotoba-lang の **clojure.edn → kotoba.lang.edn ReWiRe (wave-2) と dispatch-g
 
 1. **evidence script を 1 回実行** して出力 JSON を読む。再計測・再計算しない。
    ```bash
-   nbb ~/.hermes/profiles/kotoba-dispatch-followup/scripts/kotoba_dispatch_followup_evidence.cljs
+   nbb ~/.hermes/profiles/kotoba-dispatch-followup/scripts/kotoba_dispatch_followup_evidence.cljk
    ```
    出力は `<profile>/workspace/findings/kotoba-dispatch-evidence-<date>.json`。
    script は repo の「main が kotoba.lang.edn rewire を維持しているか(revert 検出)」を測る。
